@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import docker
 import os
 import urllib.request
@@ -26,7 +26,6 @@ url = "https://gotify.yourdomain.com/message?token=???????????"
 dockerPath = '/docker/'
 
 plexToken = "????????????????"
-
 
 def log(title, message, priority):
     # Used for logging to Gotify
@@ -72,6 +71,7 @@ def findDockerCompose(image, name):
     for dir in dirs:
         try:
             with open(dockerPath + dir + "/docker-compose.yml") as f:
+               # print("File: " + str(f) + " Image: " + str(image) + " Name: " + str(name))
                 for line in f:
                     if name + ":" in line:
                         composePath = dockerPath + dir + "/docker-compose.yml"
@@ -88,18 +88,22 @@ def getComposeVersion(image, name):
     try:
         with open(composeFile) as f:
             for line in f:
+                if "#no-docker-update" in line:
+                    return False
                 if "image:" in line and "#" not in line:
                     composeImage.append(re.split(r"image: ", line)[1].split('\n')[0])
         if type(composeImage) == list:
             for i in composeImage:
+                #print("Image in list: " + str(i.split('/')[1][0:]) + " VS " + str(image.split('/')[1][0:]))
                 if "/" in i:
-                    if i.split('/')[1][0:] == image.split('/')[1][0:]:
+                    if i.split('/')[1] == image.split('/')[1]:
                         composeImage = i
                         return composeImage
                 else:
                     if i == image:
                         composeImage = i                                                                                               
                         return composeImage                                                                                            
+            # If no match, return "None"
             return "None"
         else:
             return str(composeImage)
@@ -121,17 +125,18 @@ def restartContainer(image, name):
 
 
 def updateContainer(name):
-    if str("k8s_") in str(name.name.lower()):
-        return False
     if str("plex").lower() in str(name.name.lower()):
         if not args.forceUpdate:
             print("Container is Plex, checking for streams...")
             plexStreams = checkPlexUsage()
-            if plexStreams > 0:
+            if type(plexStreams) != "None" and plexStreams > 0:
                 print("Streaming: " + str(plexStreams))
                 return False
     img = name.attrs['Config']['Image']
     composeImage = getComposeVersion(img, name.name)
+    if composeImage is False:
+        print("no-docker-update flag set in docker-compose")
+        return False
     if composeImage is None:
         return False
     if img is composeImage:
